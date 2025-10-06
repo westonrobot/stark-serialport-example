@@ -92,7 +92,7 @@ int main(int argc, char const *argv[]) {
           handle, slave_id, number_positions[number], durations, 6);
 
       // Wait for fingers to reach target position
-      usleep(delay);
+      usleep(delay * 1.2);
 
       // Get and display current finger status
       auto finger_status = stark_get_motor_status(handle, slave_id);
@@ -114,6 +114,7 @@ int main(int argc, char const *argv[]) {
       stark_run_action_sequence(handle, slave_id, (ActionSequenceId)action_id);
       usleep(delay * 5);  // Wait for the action sequence to complete
     }
+      stark_run_action_sequence(handle, slave_id, ACTION_SEQUENCE_ID_DEFAULT_GESTURE_OPEN);
 
     // usleep(delay * 3);  // Pause before reading the touch sensor data
 
