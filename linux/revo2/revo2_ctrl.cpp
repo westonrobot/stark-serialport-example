@@ -8,8 +8,7 @@
 void get_device_info(DeviceHandler *handleint, uint8_t slave_id);
 void get_info(DeviceHandler *handle, uint8_t slave_id);
 
-void handler(int sig)
-{
+void handler(int sig) {
   void *array[10];
   size_t size;
 
@@ -22,22 +21,22 @@ void handler(int sig)
   exit(1);
 }
 
-int main(int argc, char const *argv[])
-{
-  signal(SIGSEGV, handler); // Install our handler for SIGSEGV (segmentation fault)
-  signal(SIGABRT, handler); // Install our handler for SIGABRT (abort signal)
+int main(int argc, char const *argv[]) {
+  signal(SIGSEGV,
+         handler);  // Install our handler for SIGSEGV (segmentation fault)
+  signal(SIGABRT, handler);  // Install our handler for SIGABRT (abort signal)
 
-  init_cfg(STARK_PROTOCOL_TYPE_MODBUS, LOG_LEVEL_DEBUG); // 初始化配置
-  auto cfg = auto_detect_modbus_revo2("/dev/ttyUSB0", true); // 替换为实际的串口名称, 传None会尝试自动检测
-  if (cfg == NULL)
-  {
+  init_cfg(STARK_PROTOCOL_TYPE_MODBUS, LOG_LEVEL_DEBUG);  // 初始化配置
+  auto cfg = auto_detect_modbus_revo2(
+      "/dev/ttyUSB0", true);  // 替换为实际的串口名称, 传None会尝试自动检测
+  if (cfg == NULL) {
     fprintf(stderr, "Failed to auto-detect Modbus device configuration.\n");
     return -1;
   }
   uint8_t slave_id = cfg->slave_id;
   auto handle = modbus_open(cfg->port_name, cfg->baudrate);
   free_device_config(cfg);
-  
+
   get_device_info(handle, slave_id);
 
   // 设置手指控制参数的单位模式
@@ -45,114 +44,129 @@ int main(int argc, char const *argv[])
   // stark_set_finger_unit_mode(handle, slave_id, FINGER_UNIT_MODE_PHYSICAL);
 
   auto mode = stark_get_finger_unit_mode(handle, slave_id);
-  if (mode == FINGER_UNIT_MODE_NORMALIZED)
-  {
+  if (mode == FINGER_UNIT_MODE_NORMALIZED) {
     printf("Finger unit mode: Normalized\n");
-  }
-  else if (mode == FINGER_UNIT_MODE_PHYSICAL)
-  {
+  } else if (mode == FINGER_UNIT_MODE_PHYSICAL) {
     printf("Finger unit mode: Physical\n");
-  }
-  else
-  {
+  } else {
     printf("Finger unit mode: Unknown\n");
   }
 
-  // 设置手指参数，最大角度，最小角度，最大速度，最大电流，保护电流, 各个手指参数范围详见文档
-  auto finger_id = STARK_FINGER_ID_MIDDLE;
-  // stark_set_finger_min_position(handle, slave_id, finger_id, 0);
-  // auto min_position = stark_get_finger_min_position(handle, slave_id, finger_id);
-  // printf("Finger[%hhu] min position: %hu\n", finger_id, min_position);
+  // Enable touch sensor feedback
+  // stark_enable_touch_sensor(handle, slave_id, 0b11111);  // 启用全部触觉传感器
 
-  // stark_set_finger_max_position(handle, slave_id, finger_id, 80);
-  // auto max_position = stark_get_finger_max_position(handle, slave_id, finger_id);
-  // printf("Finger[%hhu] max position: %hu\n", finger_id, max_position);
+  useconds_t delay = 1000 * 1000;  // 1000ms delay between numbers
+  // Define finger positions for numbers 0-9
+  // Array format: [thumb, thumb_aux, index, middle, ring, pinky]
+  // 0 = fully open, 1000 = fully closed
+  uint16_t number_positions[10][6] = {
+      // 0: Closed fist
+      {700, 400, 1000, 1000, 1000, 1000},
+      // 1: Only index finger extended
+      {700, 400, 0, 1000, 1000, 1000},
+      // 2: Index and middle fingers extended
+      {700, 400, 0, 0, 1000, 1000},
+      // 3: Index, middle, and ring fingers extended
+      {700, 400, 0, 0, 0, 1000},
+      // 4: All fingers except thumb extended
+      {700, 400, 0, 0, 0, 0},
+      // 5: All fingers extended (open hand)
+      {0, 0, 0, 0, 0, 0},
+      // 6: Thumb and pinky extended (like "hang loose" gesture)
+      {0, 0, 1000, 1000, 1000, 0},
+      // 7: Thumb, index, and middle extended
+      {0, 0, 0, 1000, 1000, 1000},
+      // 8: All fingers except pinky extended
+      {0, 0, 0, 0, 1000, 1000},
+      // 9: All fingers except ring and pinky extended
+      {0, 0, 0, 0, 0, 1000}};
+  uint16_t durations[6] = {1000, 1000, 1000, 1000, 1000, 1000};
 
-  // stark_set_finger_max_speed(handle, slave_id, finger_id, 130);
-  // auto max_speed = stark_get_finger_max_speed(handle, slave_id, finger_id);
-  // printf("Finger[%hhu] max speed: %hu\n", finger_id, max_speed);
+  while (true) {
+    for (int number = 0; number <= 9; number++) {
+      printf("Starting counting sequence from 0 to 9...\n");
+      printf("Displaying number: %d\n", number);
 
-  // stark_set_finger_max_current(handle, slave_id, finger_id, 1000);
-  // auto max_current = stark_get_finger_max_current(handle, slave_id, finger_id);
-  // printf("Finger[%hhu] max current: %hu\n", finger_id, max_current);
+      // Set finger positions for the current number
+      stark_set_finger_positions_and_durations(
+          handle, slave_id, number_positions[number], durations, 6);
 
-  // stark_set_finger_protected_current(handle, slave_id, finger_id, 500);
-  // auto protected_current = stark_get_finger_protected_current(handle, slave_id, finger_id);
-  // printf("Finger[%hhu] protect current: %hu\n", finger_id, protected_current);
+      // Wait for fingers to reach target position
+      usleep(delay);
 
-  useconds_t delay = 1000 * 1000; // 1000ms
+      // Get and display current finger status
+      auto finger_status = stark_get_motor_status(handle, slave_id);
+      if (finger_status != NULL) {
+        printf("Number %d - Positions: %hu, %hu, %hu, %hu, %hu, %hu\n", number,
+               finger_status->positions[0], finger_status->positions[1],
+               finger_status->positions[2], finger_status->positions[3],
+               finger_status->positions[4], finger_status->positions[5]);
+        free_motor_status_data(finger_status);
+      }
+    }
 
-  // 单个手指，按速度/电流/PWM控制
-  // 其中符号表示方向，正表示为握紧方向，负表示为松开方向
-  stark_set_finger_speed(handle, slave_id, finger_id, 500);    // -1000 ~ 1000
-  usleep(delay);                                                // 等待手指到达目标位置
-  stark_set_finger_current(handle, slave_id, finger_id, -300); // -1000 ~ 1000
-  usleep(delay);                                                // 等待手指到达目标位置
-  stark_set_finger_pwm(handle, slave_id, finger_id, 700);      // -1000 ~ 1000
-  usleep(delay);                                                // 等待手指到达目标位置
+    usleep(delay * 3);  // Pause before starting the sequence
 
-  // 多个手指，按速度/电流/PWM控制
-  // 其中符号表示方向，正表示为握紧方向，负表示为松开方向
-  int16_t speeds[6] = {100, 100, 500, 500, 500, 500};
-  stark_set_finger_speeds(handle, slave_id, speeds, 6);
-  usleep(delay); // 等待手指到达目标位置
-  int16_t currents[6] = {-300, -300, -300, -300, -300, -300};
-  stark_set_finger_currents(handle, slave_id, currents, 6);
-  usleep(delay); // 等待手指到达目标位置
-  int16_t pwms[6] = {100, 100, 700, 700, 700, 700};
-  stark_set_finger_pwms(handle, slave_id, pwms, 6);
-  usleep(delay); // 等待手指到达目标位置
+    for (int action_id = ACTION_SEQUENCE_ID_DEFAULT_GESTURE_OPEN;
+         action_id <= ACTION_SEQUENCE_ID_DEFAULT_GESTURE_POINT; action_id++) {
+      printf("Running action sequence ID: %d\n", action_id);
+      // 运行预定义的动作序列
+      stark_run_action_sequence(handle, slave_id, (ActionSequenceId)action_id);
+      usleep(delay * 5);  // Wait for the action sequence to complete
+    }
 
-  // 单个手指，按位置+速度/期望时间，无符号
-  stark_set_finger_position_with_millis(handle, slave_id, finger_id, 1000, 1000);
-  usleep(delay); // 等待手指到达目标位置
-  stark_set_finger_position_with_speed(handle, slave_id, finger_id, 1, 50);
-  usleep(delay); // 等待手指到达目标位置
+    // usleep(delay * 3);  // Pause before reading the touch sensor data
 
-  // 多个手指，按位置+速度/期望时间，无符号
-  uint16_t positions[6] = {300, 300, 500, 500, 500, 500};
-  uint16_t durations[6] = {300, 300, 300, 300, 300, 300};
-  stark_set_finger_positions_and_durations(handle, slave_id, positions, durations, 6);
-  usleep(delay); // 等待手指到达目标位置
+    // 读取并显示触觉传感器数据
+    // auto touch_data = stark_get_touch_status(handle, slave_id);
+    // if (touch_data != NULL) {
+    //   for (int i = 0; i < 5; i++) {
+    //     printf(
+    //         "Finger %d - Normal Forces: %hu, %hu, %hu | Tangential Forces: "
+    //         "%hu, %hu, %hu | Tangential Directions: %hu, %hu, %hu | Self "
+    //         "Proximity: %u, %u | Mutual Proximity: %u | Status: %hu\n",
+    //         i, touch_data->items[i].normal_force1,
+    //         touch_data->items[i].normal_force2,
+    //         touch_data->items[i].normal_force3,
+    //         touch_data->items[i].tangential_force1,
+    //         touch_data->items[i].tangential_force2,
+    //         touch_data->items[i].tangential_force3,
+    //         touch_data->items[i].tangential_direction1,
+    //         touch_data->items[i].tangential_direction2,
+    //         touch_data->items[i].tangential_direction3,
+    //         touch_data->items[i].self_proximity1,
+    //         touch_data->items[i].self_proximity2,
+    //         touch_data->items[i].mutual_proximity, touch_data->items[i].status);
+    //   }
+    //   free_touch_finger_data(touch_data);
+    // }
 
-  uint16_t positions2[6] = {30, 30, 100, 100, 100, 100};
-  uint16_t speeds2[6] = {500, 500, 500, 500, 500, 500};
-  stark_set_finger_positions_and_speeds(handle, slave_id, positions2, speeds2, 6);
-  usleep(delay); // 等待手指到达目标位置
-
-  auto finger_status = stark_get_motor_status(handle, slave_id);
-  if (finger_status != NULL)
-  {
-    printf("Positions: %hu, %hu, %hu, %hu, %hu, %hu\n", finger_status->positions[0], finger_status->positions[1], finger_status->positions[2], finger_status->positions[3], finger_status->positions[4], finger_status->positions[5]);
-    printf("Speeds: %hd, %hd, %hd, %hd, %hd, %hd\n", finger_status->speeds[0], finger_status->speeds[1], finger_status->speeds[2], finger_status->speeds[3], finger_status->speeds[4], finger_status->speeds[5]);
-    printf("Currents: %hd, %hd, %hd, %hd, %hd, %hd\n", finger_status->currents[0], finger_status->currents[1], finger_status->currents[2], finger_status->currents[3], finger_status->currents[4], finger_status->currents[5]);
-    printf("States: %hhu, %hhu, %hhu, %hhu, %hhu, %hhu\n", finger_status->states[0], finger_status->states[1], finger_status->states[2], finger_status->states[3], finger_status->states[4], finger_status->states[5]);
-    free_motor_status_data(finger_status);
+    printf("Demo cycle completed. Restarting...\n");
+    usleep(delay * 15);  // Pause before restarting the sequence
   }
-
   return 0;
 }
 
 // 获取设备序列号、固件版本等信息
-void get_device_info(DeviceHandler *handle, uint8_t slave_id)
-{
+void get_device_info(DeviceHandler *handle, uint8_t slave_id) {
   auto info = stark_get_device_info(handle, slave_id);
-  if (info != NULL)
-  {
-    printf("Slave[%hhu] SKU Type: %hhu, Serial Number: %s, Firmware Version: %s\n", slave_id, (uint8_t)info->sku_type, info->serial_number, info->firmware_version);
-    if (info->hardware_type == STARK_HARDWARE_TYPE_REVO1_TOUCH || info->hardware_type == STARK_HARDWARE_TYPE_REVO2_TOUCH)
-    {
+  if (info != NULL) {
+    printf(
+        "Slave[%hhu] SKU Type: %hhu, Serial Number: %s, Firmware Version: %s\n",
+        slave_id, (uint8_t)info->sku_type, info->serial_number,
+        info->firmware_version);
+    if (info->hardware_type == STARK_HARDWARE_TYPE_REVO1_TOUCH ||
+        info->hardware_type == STARK_HARDWARE_TYPE_REVO2_TOUCH) {
       // 启用全部触觉传感器
       stark_enable_touch_sensor(handle, slave_id, 0x1F);
-      usleep(1000 * 1000); // wait for touch sensor to be ready
+      usleep(1000 * 1000);  // wait for touch sensor to be ready
     }
     free_device_info(info);
   }
 }
 
 // 获取设备信息, 波特率, LED信息, 按键事件
-void get_info(DeviceHandler *handle, uint8_t slave_id)
-{
+void get_info(DeviceHandler *handle, uint8_t slave_id) {
   // RS485串口波特率
   auto baudrate = stark_get_rs485_baudrate(handle, slave_id);
   printf("Slave[%hhu] Baudrate: %d\n", slave_id, baudrate);
@@ -162,16 +176,17 @@ void get_info(DeviceHandler *handle, uint8_t slave_id)
   printf("Slave[%hhu] CANFD Baudrate: %d\n", slave_id, canfd_baudrate);
 
   auto led_info = stark_get_led_info(handle, slave_id);
-  if (led_info != NULL)
-  {
-    printf("Slave[%hhu] LED Info: %hhu, %hhu\n", slave_id, led_info->mode, led_info->color);
+  if (led_info != NULL) {
+    printf("Slave[%hhu] LED Info: %hhu, %hhu\n", slave_id, led_info->mode,
+           led_info->color);
     free_led_info(led_info);
   }
 
   auto button_event = stark_get_button_event(handle, slave_id);
-  if (button_event != NULL)
-  {
-    printf("Slave[%hhu] Button Event: %d, %d, %hhu\n", slave_id, button_event->timestamp, button_event->button_id, button_event->press_state);
+  if (button_event != NULL) {
+    printf("Slave[%hhu] Button Event: %d, %d, %hhu\n", slave_id,
+           button_event->timestamp, button_event->button_id,
+           button_event->press_state);
     free_button_event(button_event);
   }
 }
