@@ -10,8 +10,11 @@
 #include <new>
 
 /// 内置手势1~6：张开、握拳、两只捏、三只捏、侧边捏、单指点
+/// Built-in gestures 1~6: open, fist, two-finger pinch, three-finger pinch, side pinch, single finger point
 /// 一代手最多支持6个自定义动作序列: 10~15
+/// Generation 1 hands support up to 6 custom action sequences: 10~15
 /// 二代手最多支持24个定义动作序列: 7~30
+/// Generation 2 hands support up to 24 custom action sequences: 7~30
 enum ActionSequenceId : uint8_t {
   ACTION_SEQUENCE_ID_DEFAULT_GESTURE_OPEN = 1,
   ACTION_SEQUENCE_ID_DEFAULT_GESTURE_FIST = 2,
@@ -152,6 +155,7 @@ enum TouchSensorStatus : uint8_t {
 struct DeviceHandler;
 
 /// 设备配置
+/// Device configuration
 struct DeviceConfig {
   StarkProtocolType protocol;
   const char *port_name;
@@ -160,9 +164,13 @@ struct DeviceConfig {
 };
 
 /// 设备信息
+/// Device information
 /// sku_type: 设备类型，1: 右手 2: 左手
+/// sku_type: Device type, 1: right hand 2: left hand
 /// serial_number: 序列号
+/// serial_number: Serial number
 /// firmware_version: 固件版本
+/// firmware_version: Firmware version
 struct DeviceInfo {
   StarkHardwareType hardware_type;
   SkuType sku_type;
@@ -186,8 +194,11 @@ struct TouchRawData {
 };
 
 /// 触觉传感器数据
+/// Tactile sensor data
 /// 三维力数值、自接近、互接近电容值，以及传感器状态
+/// 3D force values, self-proximity, mutual proximity capacitance values, and sensor status
 /// 二代触觉手只有法向力，切向力，切向力方向，接近值，四个值，其他值为0
+/// Generation 2 tactile hands only have normal force, tangential force, tangential force direction, and proximity values (4 values), other values are 0
 struct TouchFingerItem {
   uint16_t normal_force1;
   uint16_t normal_force2;
@@ -225,131 +236,192 @@ struct ButtonPressEvent {
 };
 
 /// Modbus异步读写回调
+/// Modbus asynchronous read/write callback
 /// 该回调函数用于处理Modbus异步操作的结果。
+/// This callback function is used to handle the results of Modbus asynchronous operations.
 /// 返回值为 0 成功，其他值失败
+/// Return value: 0 for success, other values for failure
 using ModbusOperationResultCallback = void(*)(uint8_t*, int, int, void*);
 
 /// Modbus异步读写回调
+/// Modbus asynchronous read/write callback
 /// 返回值为 0 成功，其他值失败
+/// Return value: 0 for success, other values for failure
 using ModbusOperationCallback = int32_t(*)(const uint8_t *values,
                                            int len,
                                            ModbusOperationResultCallback callback,
                                            void *user_data);
 
 /// 自定义Modbus接收回调
+/// Custom Modbus receive callback
 /// 返回值为 0 成功，其他值失败
+/// Return value: 0 for success, other values for failure
 using ModbusRxCallback = int32_t(*)(uint8_t slave_id,
                                     uint16_t register_address,
                                     uint16_t *data_out,
                                     uint16_t count);
 
 /// 自定义Modbus发送回调
+/// Custom Modbus send callback
 /// 返回值为 0 成功，其他值失败
+/// Return value: 0 for success, other values for failure
 using ModbusTxCallback = int32_t(*)(uint8_t slave_id,
                                     uint16_t register_address,
                                     const uint16_t *data,
                                     uint16_t count);
 
 /// CAN/CANFD 接收回调
+/// CAN/CANFD receive callback
 /// 注意data_out 长度最多为 64
+/// Note: data_out maximum length is 64
 /// 返回值为 0 成功，其他值失败
+/// Return value: 0 for success, other values for failure
 using CanRxCallback = int32_t(*)(uint8_t slave_id,
                                  uint32_t *can_id_out,
                                  uint8_t *data_out,
                                  uintptr_t *data_len_out);
 
 /// CAN/CANFD 发送回调
+/// CAN/CANFD send callback
 /// 返回值为 0 成功，其他值失败
+/// Return value: 0 for success, other values for failure
 using CanTxCallback = int32_t(*)(uint8_t slave_id,
                                  uint32_t can_id,
                                  const uint8_t *data,
                                  uintptr_t data_len);
 
 /// DFU状态回调, state: DfuState
+/// DFU state callback, state: DfuState
 using DfuStateCallback = void(*)(uint8_t slave_id, uint8_t state);
 
 /// DFU进度回调
+/// DFU progress callback
 using DfuProgressCallback = void(*)(uint8_t slave_id, float progress);
 
 extern "C" {
 
 /// 初始化选项
+/// Initialize options
 /// protocol_type: 协议类型，默认为 Modbus
+/// protocol_type: Protocol type, default is Modbus
 /// log_level: 日志级别，默认为 Info
+/// log_level: Log level, default is Info
 void init_cfg(StarkProtocolType protocol_type, LogLevel log_level);
 
 /// 列出可用的串口
+/// List available serial ports
 /// 用于列出所有的 Stark 串口
+/// Used to list all Stark serial ports
 void list_available_ports();
 
 /// 自动检测串口设备，先检测二代灵巧手，再检测一代灵巧手
+/// Auto-detect serial port device, first detect generation 2 dexterous hand, then generation 1 dexterous hand
 /// port: 串口名称，传入 None 时自动检测
+/// port: Serial port name, auto-detect when passing None
 /// quick: 是否快速检测，默认为 true, 默认只检测集中特定波特率及设备ID
+/// quick: Whether to do quick detection, default is true, only detects specific baud rates and device IDs by default
 /// 返回 DeviceConfig 结构体指针，包含协议类型、端口名称、波特率和设备ID，关闭时需要调用 free_device_config 释放内存
+/// Returns DeviceConfig struct pointer containing protocol type, port name, baud rate and device ID, call free_device_config to release memory when closing
 /// 如果失败，返回 NULL
+/// Returns NULL if failed
 /// 注意：quick传false时，此函数会自动检测设备ID范围1~247，可能需要较长时间
+/// Note: When quick is false, this function will auto-detect device ID range 1~247, which may take a long time
 DeviceConfig *auto_detect_device(const char *port,
                                  bool quick);
 
 /// 自动检测一代灵巧手设备
+/// Auto-detect generation 1 dexterous hand device
 /// port: 串口名称，传入 None 时自动检测
+/// port: Serial port name, auto-detect when passing None
 /// quick: 是否快速检测，默认为 true, 默认只检测集中特定波特率及设备ID
+/// quick: Whether to do quick detection, default is true, only detects specific baud rates and device IDs by default
 /// 返回 DeviceConfig 结构体指针，包含协议类型、端口名称、波特率和设备ID，，关闭时需要调用 free_device_config 释放内存
+/// Returns DeviceConfig struct pointer containing protocol type, port name, baud rate and device ID, call free_device_config to release memory when closing
 /// 如果失败，返回 NULL
+/// Returns NULL if failed
 /// 注意：quick传false时，此函数会自动检测设备ID范围1~247，可能需要较长时间
+/// Note: When quick is false, this function will auto-detect device ID range 1~247, which may take a long time
 DeviceConfig *auto_detect_modbus_revo1(const char *port,
                                        bool quick);
 
 /// 自动检测二代灵巧手设备
+/// Auto-detect generation 2 dexterous hand device
 /// port: 串口名称，传入 None 时自动检测
+/// port: Serial port name, auto-detect when passing None
 /// quick: 是否快速检测，默认为 true, 默认只检测集中特定波特率及设备ID
+/// quick: Whether to do quick detection, default is true, only detects specific baud rates and device IDs by default
 /// 返回 DeviceConfig 结构体指针，包含协议类型、端口名称、波特率和设备ID，，关闭时需要调用 free_device_config 释放内存
+/// Returns DeviceConfig struct pointer containing protocol type, port name, baud rate and device ID, call free_device_config to release memory when closing
 /// 如果失败，返回 NULL
+/// Returns NULL if failed
 /// 注意：quick传false时，此函数会自动检测设备ID范围1~247，可能需要较长时间
+/// Note: When quick is false, this function will auto-detect device ID range 1~247, which may take a long time
 DeviceConfig *auto_detect_modbus_revo2(const char *port,
                                        bool quick);
 
 /// 打开串口
+/// Open serial port
 /// port: 串口名称，例如："/dev/ttyUSB0", "COM1"
+/// port: Serial port name, e.g.: "/dev/ttyUSB0", "COM1"
 /// baudrate: 波特率，115200, 57600, 19200, 460800，一代手默认为115200，二代手默认为460800, 二代手支持1M, 2M, 5M
+/// baudrate: Baud rate, 115200, 57600, 19200, 460800, generation 1 default is 115200, generation 2 default is 460800, generation 2 supports 1M, 2M, 5M
 /// 返回 DeviceHandler 结构体指针，关闭时需要调用 modbus_close 释放内存
+/// Returns DeviceHandler struct pointer, call modbus_close to release memory when closing
 /// 如果失败，返回 NULL
+/// Returns NULL if failed
 DeviceHandler *modbus_open(const char *port,
                            uint32_t baudrate);
 
 /// 关闭串口
+/// Close serial port
 void modbus_close(DeviceHandler *handle);
 
 /// @brief  创建一个新的 DeviceHandler 结构体
+/// @brief  Create a new DeviceHandler structure
 /// @return  返回指向新创建的 DeviceHandler 结构体的指针，关闭时需要调用 free_device_handler 释放内存
+/// @return  Returns pointer to newly created DeviceHandler structure, call free_device_handler to release memory when closing
 DeviceHandler *create_device_handler();
 
 /// @brief  释放 DeviceHandler 结构体
+/// @brief  Free DeviceHandler structure
 /// @param handle  DeviceHandler 结构体指针
+/// @param handle  DeviceHandler structure pointer
 void free_device_handler(DeviceHandler *handle);
 
 /// @brief  创建一个新的 DeviceHandler 结构体
+/// @brief  Create a new DeviceHandler structure
 /// @param master_id: 主设备ID，范围为1~255
+/// @param master_id: Master device ID, range 1~255
 /// @return  返回指向新创建的 DeviceHandler 结构体的指针，关闭时需要调用 free_device_handler 释放内存
+/// @return  Returns pointer to newly created DeviceHandler structure, call free_device_handler to release memory when closing
 DeviceHandler *canfd_init(uint8_t master_id);
 
 /// 打开EtherCAT igH Master主站
+/// Open EtherCAT igH Master station
 DeviceHandler *ethercat_open_master(uint32_t master_pos);
 
 /// 关闭EtherCAT igH Master主站
+/// Close EtherCAT igH Master station
 void ethercat_close(DeviceHandler *handle);
 
 /// 设置EtherCAT设备的SDO
+/// Set EtherCAT device SDO
 void ethercat_setup_sdo(DeviceHandler *handle, uint16_t slave_pos);
 
 void ethercat_reserve_master(DeviceHandler *handle);
 
 /// 开始EtherCAT循环, PDO通信控制&读取
+/// Start EtherCAT loop, PDO communication control & read
 /// dc_assign_activate: DC标志，0x0000表示不设置DC
+/// dc_assign_activate: DC flag, 0x0000 means no DC setting
 /// sync0_cycle_time: SYNC0周期时间，单位为纳秒, loop循环周期和 SYNC0周期时间一致
+/// sync0_cycle_time: SYNC0 cycle time in nanoseconds, loop cycle time should match SYNC0 cycle time
 /// sync0_shift_time: SYNC0相位偏移时间，单位为纳秒
+/// sync0_shift_time: SYNC0 phase shift time in nanoseconds
 /// sync1_cycle_time: SYNC1周期时间，单位为纳秒
+/// sync1_cycle_time: SYNC1 cycle time in nanoseconds
 /// sync1_shift_time: SYNC1相位偏移时间，单位为纳秒
+/// sync1_shift_time: SYNC1 phase shift time in nanoseconds
 void ethercat_start_loop(DeviceHandler *handle,
                          const uint16_t *slave_positions,
                          int count,
@@ -360,211 +432,292 @@ void ethercat_start_loop(DeviceHandler *handle,
                          int32_t sync1_shift_time);
 
 /// 停止EtherCAT循环
+/// Stop EtherCAT loop
 void ethercat_stop_loop(DeviceHandler *handle);
 
 /// EtherCAT DFU, 通过Foe协议进行固件升级
+/// EtherCAT DFU, firmware upgrade via FoE protocol
 /// slave_pos: 从站位置
+/// slave_pos: Slave position
 /// dfu_type: DFU类型，Control或Wrist
+/// dfu_type: DFU type, Control or Wrist
 /// file_path: 固件文件路径
+/// file_path: Firmware file path
 void ethercat_start_dfu(DeviceHandler *handle,
                         uint16_t slave_pos,
                         EtherCATFoeType dfu_type,
                         const char *file_path);
 
 /// 获取设备信息
+/// Get device information
 /// 返回 DeviceInfo 结构体指针，需要调用 free_device_info 释放内存
+/// Returns DeviceInfo struct pointer, call free_device_info to release memory
 /// 如果失败，返回 NULL
+/// Returns NULL if failed
 DeviceInfo *stark_get_device_info(DeviceHandler *handle, uint8_t slave_id);
 
 /// 根据序列号判断是否为触觉版灵巧手
+/// Determine if it's a tactile version dexterous hand based on serial number
 bool is_touch_hand_by_sn(const char *sn_ptr);
 
 /// 根据序列号判断是否为二代灵巧手
+/// Determine if it's a generation 2 dexterous hand based on serial number
 bool is_revo2_hand_by_sn(const char *sn_ptr);
 
 /// 获取RS485串口设备波特率
+/// Get RS485 serial device baud rate
 /// 115200, 57600, 19200, 460800
 uint32_t stark_get_rs485_baudrate(DeviceHandler *handle, uint8_t slave_id);
 
 /// 设置RS485串口设备波特率
+/// Set RS485 serial device baud rate
 /// 115200, 57600, 19200, 460800
 void stark_set_rs485_baudrate(DeviceHandler *handle, uint8_t slave_id, uint32_t baudrate);
 
 /// 获取CANFD设备波特率
+/// Get CANFD device baud rate
 /// 1M, 2M, 4M, 5M
 uint32_t stark_get_canfd_baudrate(DeviceHandler *handle, uint8_t slave_id);
 
 /// 设置CANFD设备波特率
+/// Set CANFD device baud rate
 /// 1M, 2M, 4M, 5M
 void stark_set_canfd_baudrate(DeviceHandler *handle, uint8_t slave_id, uint32_t baudrate);
 
 /// 设置设备ID，默认为1，范围为1~247, 0 为广播地址，一代手默认为1，二代手左手默认ID为0x7e，右手默认ID为0x7f
+/// Set device ID, default is 1, range 1~247, 0 is broadcast address, generation 1 default is 1, generation 2 left hand default ID is 0x7e, right hand default ID is 0x7f
 /// 当需要在一条总线上同时控制多只设备时，需要将设备ID设置为不同的值
+/// When multiple devices need to be controlled simultaneously on one bus, device IDs need to be set to different values
 /// 例如：设置左手ID为1，右手ID为2
+/// For example: set left hand ID to 1, right hand ID to 2
 /// 通过广播地址0，可以同时控制总线上的所有设备，Mobbus协议规定广播地址的设备不会回复
+/// Through broadcast address 0, all devices on the bus can be controlled simultaneously, Modbus protocol specifies that devices with broadcast address will not reply
 void stark_set_slave_id(DeviceHandler *handle,
                         uint8_t slave_id,
                         uint8_t new_id);
 
 /// Deprecated
 /// 设置力量等级，仅支持标准版一代手
+/// Set force level, only supports standard version generation 1 hand
 void stark_set_force_level(DeviceHandler *handle, uint8_t slave_id, ForceLevel level);
 
 /// Deprecated
 /// 获取力量等级，仅支持标准版一代手
+/// Get force level, only supports standard version generation 1 hand
 uint8_t stark_get_force_level(DeviceHandler *handle, uint8_t slave_id);
 
 /// 获取电压值，单位mV
+/// Get voltage value in mV
 uint16_t stark_get_voltage(DeviceHandler *handle, uint8_t slave_id);
 
 /// 获取LED开关
+/// Get LED switch status
 bool get_led_enabled(DeviceHandler *handle, uint8_t slave_id);
 
 /// 获取蜂鸣器开关
+/// Get buzzer switch status
 bool get_buzzer_enabled(DeviceHandler *handle, uint8_t slave_id);
 
 /// 获取震动开关
+/// Get vibration switch status
 bool get_vibration_enabled(DeviceHandler *handle, uint8_t slave_id);
 
 /// 设置LED开关
+/// Set LED switch
 void set_led_enabled(DeviceHandler *handle, uint8_t slave_id, bool enabled);
 
 /// 设置蜂鸣器开关
+/// Set buzzer switch
 void set_buzzer_enabled(DeviceHandler *handle, uint8_t slave_id, bool enabled);
 
 /// 设置震动开关
+/// Set vibration switch
 void set_vibration_enabled(DeviceHandler *handle, uint8_t slave_id, bool enabled);
 
 /// 二代手设置单位模式，手指参数，上电后重置
+/// Generation 2 hand set unit mode, finger parameters, reset after power on
 /// 参数范围详见文档
+/// For parameter ranges see documentation
 /// https://brainco.yuque.com/tykrbo/hws0nr/pynh5qnmfa1bgamc
 /// 设置控制的单位模式
+/// Set control unit mode
 /// 无极模式，物理量模式
+/// Normalized mode, physical quantity mode
 void stark_set_finger_unit_mode(DeviceHandler *handle, uint8_t slave_id, FingerUnitMode mode);
 
 /// 获取控制的单位模式
+/// Get control unit mode
 /// 返回 FingerUnitMode
+/// Returns FingerUnitMode
 /// 如果失败，返回 FingerUnitMode::Normalized
+/// Returns FingerUnitMode::Normalized if failed
 FingerUnitMode stark_get_finger_unit_mode(DeviceHandler *handle, uint8_t slave_id);
 
 /// 设置最大角度
+/// Set maximum angle
 /// max_pos: 最大角度值，默认为 60 87 84 84 84 84
+/// max_pos: Maximum angle value, default is 60 87 84 84 84 84
 void stark_set_finger_max_position(DeviceHandler *handle,
                                    uint8_t slave_id,
                                    StarkFingerId finger_id,
                                    uint16_t max_pos);
 
 /// 设置最小角度
+/// Set minimum angle
 /// min_pos: 最小角度值，单位(°)，默认为 0 0 0 0 0 0
+/// min_pos: Minimum angle value, unit (°), default is 0 0 0 0 0 0
 void stark_set_finger_min_position(DeviceHandler *handle,
                                    uint8_t slave_id,
                                    StarkFingerId finger_id,
                                    uint16_t min_pos);
 
 /// 设置最大速度
+/// Set maximum speed
 /// max_speed: 最大速度值，单位(°/s)，默认值为 145 150 130 130 130 130
+/// max_speed: Maximum speed value, unit (°/s), default is 145 150 130 130 130 130
 void stark_set_finger_max_speed(DeviceHandler *handle,
                                 uint8_t slave_id,
                                 StarkFingerId finger_id,
                                 uint16_t max_speed);
 
 /// 设置最大电流
+/// Set maximum current
 /// max_current: 最大电流值，单位(mA)，默认值为 1000
+/// max_current: Maximum current value, unit (mA), default is 1000
 void stark_set_finger_max_current(DeviceHandler *handle,
                                   uint8_t slave_id,
                                   StarkFingerId finger_id,
                                   uint16_t max_current);
 
 /// 设置保护电流
+/// Set protection current
 /// protected_current: 保护电流值，单位(mA), 范围为 100~1500，默认值为 500 500 500 500 500 500
+/// protected_current: Protection current value, unit (mA), range 100~1500, default is 500 500 500 500 500 500
 void stark_set_finger_protected_current(DeviceHandler *handle,
                                         uint8_t slave_id,
                                         StarkFingerId finger_id,
                                         uint16_t protected_current);
 
 /// 读取最大角度
+/// Read maximum angle
 /// 读取失败时返回0
+/// Returns 0 if read fails
 uint16_t stark_get_finger_max_position(DeviceHandler *handle,
                                        uint8_t slave_id,
                                        StarkFingerId finger_id);
 
 /// 读取最小角度
+/// Read minimum angle
 /// min_pos: 最小角度值，单位(°)，默认为 0 0 0 0 0 0
+/// min_pos: Minimum angle value, unit (°), default is 0 0 0 0 0 0
 uint16_t stark_get_finger_min_position(DeviceHandler *handle,
                                        uint8_t slave_id,
                                        StarkFingerId finger_id);
 
 /// 读取最大速度
+/// Read maximum speed
 /// max_speed: 最大速度值，单位(°/s)，默认值为 145 150 130 130 130 130
+/// max_speed: Maximum speed value, unit (°/s), default is 145 150 130 130 130 130
 /// 读取失败时返回0
+/// Returns 0 if read fails
 uint16_t stark_get_finger_max_speed(DeviceHandler *handle,
                                     uint8_t slave_id,
                                     StarkFingerId finger_id);
 
 /// 读取最大电流
+/// Read maximum current
 /// max_current: 最大电流值，单位(mA)，默认值为 1000
+/// max_current: Maximum current value, unit (mA), default is 1000
 /// 读取失败时返回0
+/// Returns 0 if read fails
 uint16_t stark_get_finger_max_current(DeviceHandler *handle,
                                       uint8_t slave_id,
                                       StarkFingerId finger_id);
 
 /// 读取保护电流
+/// Read protection current
 /// protected_current: 保护电流值，单位(mA), 范围为 100~1500，默认值为 500 500 500 500 500 500
+/// protected_current: Protection current value, unit (mA), range 100~1500, default is 500 500 500 500 500 500
 /// 读取失败时返回0
+/// Returns 0 if read fails
 uint16_t stark_get_finger_protected_current(DeviceHandler *handle,
                                             uint8_t slave_id,
                                             StarkFingerId finger_id);
 
 /// 拇指 AUX 锁定电流设置
+/// Thumb AUX lock current setting
 /// aux_lock_current: 单位(mA), 范围为 100~500，默认值为 200
+/// aux_lock_current: Unit (mA), range 100~500, default is 200
 /// 仅支持二代手
+/// Only supports generation 2 hands
 void stark_set_thumb_aux_lock_current(DeviceHandler *handle,
                                       uint8_t slave_id,
                                       uint16_t aux_lock_current);
 
 /// 读取拇指 AUX 锁定电流设置
+/// Read thumb AUX lock current setting
 /// 仅支持二代手
+/// Only supports generation 2 hands
 uint16_t stark_get_thumb_aux_lock_current(DeviceHandler *handle, uint8_t slave_id);
 
 /// 设置单个手指位置
+/// Set single finger position
 /// position: 位置值，一代手范围为0~100
+/// position: Position value, generation 1 hand range 0~100
 /// 二代手范围为0~1000或最小-最大位置（°）
+/// Generation 2 hand range 0~1000 or min-max position (°)
 void stark_set_finger_position(DeviceHandler *handle,
                                uint8_t slave_id,
                                StarkFingerId finger_id,
                                uint16_t position);
 
 /// 设置单个手指速度
+/// Set single finger speed
 /// speed: 速度值，一代手范围为-100~100
+/// speed: Speed value, generation 1 hand range -100~100
 /// 二代手范围为-1000~1000或-最大速度~最大速度°/s
+/// Generation 2 hand range -1000~1000 or -max speed~max speed °/s
 /// 其中符号表示方向，正表示为握紧方向，负表示为松开方向。
+/// Sign indicates direction, positive for gripping direction, negative for opening direction.
 void stark_set_finger_speed(DeviceHandler *handle,
                             uint8_t slave_id,
                             StarkFingerId finger_id,
                             int16_t speed);
 
 /// 设置单个手指电流
+/// Set single finger current
 /// 二代基础版，参数范围为-1000~1000或-最大电流~最大电流mA
+/// Generation 2 basic version, parameter range -1000~1000 or -max current~max current mA
 /// 一代触觉版，参数范围为-100~-20, 20~100，单位mA
+/// Generation 1 tactile version, parameter range -100~-20, 20~100, unit mA
 /// 其中符号表示方向，正表示为握紧方向，负表示为松开方向。
+/// Sign indicates direction, positive for gripping direction, negative for opening direction.
 void stark_set_finger_current(DeviceHandler *handle,
                               uint8_t slave_id,
                               StarkFingerId finger_id,
                               int16_t current);
 
 /// 设置单个手指PWM
+/// Set single finger PWM
 /// 仅支持二代手
+/// Only supports generation 2 hands
 /// 范围为-1000~1000
+/// Range -1000~1000
 /// 其中符号表示方向，正表示为握紧方向，负表示为松开方向。
+/// Sign indicates direction, positive for gripping direction, negative for opening direction.
 void stark_set_finger_pwm(DeviceHandler *handle,
                           uint8_t slave_id,
                           StarkFingerId finger_id,
                           int16_t pwm);
 
 /// 设置单个手指位置+期望时间
+/// Set single finger position + expected time
 /// 仅支持二代手
+/// Only supports generation 2 hands
 /// 位置范围为0~1000或最小-最大位置（°）
+/// Position range 0~1000 or min-max position (°)
 /// 期望时间范围为1~2000ms
+/// Expected time range 1~2000ms
 void stark_set_finger_position_with_millis(DeviceHandler *handle,
                                            uint8_t slave_id,
                                            StarkFingerId finger_id,
@@ -572,9 +725,13 @@ void stark_set_finger_position_with_millis(DeviceHandler *handle,
                                            uint16_t millis);
 
 /// 设置单个手指位置+期望速度
+/// Set single finger position + expected speed
 /// 仅支持二代手
+/// Only supports generation 2 hands
 /// 位置范围为0~1000或最小最大位置（°）
+/// Position range 0~1000 or min-max position (°)
 /// 速度范围为1~1000或最小~最大速度(°/s）
+/// Speed range 1~1000 or min~max speed (°/s)
 void stark_set_finger_position_with_speed(DeviceHandler *handle,
                                           uint8_t slave_id,
                                           StarkFingerId finger_id,
@@ -582,44 +739,63 @@ void stark_set_finger_position_with_speed(DeviceHandler *handle,
                                           uint16_t speed);
 
 /// 设置多个手指位置
+/// Set multiple finger positions
 /// positions: 位置值数组，长度为6，范围为0~100, 对应百分比位置
+/// positions: Position value array, length 6, range 0~100, corresponding to percentage position
 void stark_set_finger_positions(DeviceHandler *handle,
                                 uint8_t slave_id,
                                 const uint16_t *positions,
                                 uintptr_t len);
 
 /// 设置多个手指速度
+/// Set multiple finger speeds
 /// speeds: 速度值数组，长度为6，一代手范围为-100~100
+/// speeds: Speed value array, length 6, generation 1 hand range -100~100
 /// 二代手范围为-1000~1000或-最大速度~最大速度°/s
+/// Generation 2 hand range -1000~1000 or -max speed~max speed °/s
 /// 其中符号表示方向，正表示为握紧方向，负表示为松开方向。
+/// Sign indicates direction, positive for gripping direction, negative for opening direction.
 void stark_set_finger_speeds(DeviceHandler *handle,
                              uint8_t slave_id,
                              const int16_t *speeds,
                              uintptr_t len);
 
 /// 设置多个手指电流
+/// Set multiple finger currents
 /// 二代基础版，参数范围为-1000~1000或-最大电流~最大电流mA
+/// Generation 2 basic version, parameter range -1000~1000 or -max current~max current mA
 /// 一代触觉版，参数范围为-100~-20, 20~100，单位mA
+/// Generation 1 tactile version, parameter range -100~-20, 20~100, unit mA
 /// 其中符号表示方向，正表示为握紧方向，负表示为松开方向。
+/// Sign indicates direction, positive for gripping direction, negative for opening direction.
 void stark_set_finger_currents(DeviceHandler *handle,
                                uint8_t slave_id,
                                const int16_t *currents,
                                uintptr_t len);
 
 /// 设置多个手指PWM
+/// Set multiple finger PWMs
 /// 仅支持二代手
+/// Only supports generation 2 hands
 /// pwms: PWM值数组，长度为6，范围为-1000~1000
+/// pwms: PWM value array, length 6, range -1000~1000
 /// 其中符号表示方向，正表示为握紧方向，负表示为松开方向。
+/// Sign indicates direction, positive for gripping direction, negative for opening direction.
 void stark_set_finger_pwms(DeviceHandler *handle,
                            uint8_t slave_id,
                            const int16_t *pwms,
                            uintptr_t len);
 
 /// 设置多个手指位置+期望时间
+/// Set multiple finger positions + expected time
 /// 仅支持二代手
+/// Only supports generation 2 hands
 /// positions: 位置值数组，长度为6，范围为0~1000或最小~最大位置（°）
+/// positions: Position value array, length 6, range 0~1000 or min~max position (°)
 /// millis: 期望时间值数组，长度为6，范围为1~2000ms
+/// millis: Expected time value array, length 6, range 1~2000ms
 /// 其中位置值和期望时间值一一对应
+/// Position values and expected time values correspond one-to-one
 void stark_set_finger_positions_and_durations(DeviceHandler *handle,
                                               uint8_t slave_id,
                                               const uint16_t *positions,
@@ -627,10 +803,15 @@ void stark_set_finger_positions_and_durations(DeviceHandler *handle,
                                               uintptr_t len);
 
 /// 设置多个手指位置+期望速度
+/// Set multiple finger positions + expected speed
 /// 仅支持二代手
+/// Only supports generation 2 hands
 /// positions: 位置值数组，长度为6，范围为0~1000或最小最大位置（°）
+/// positions: Position value array, length 6, range 0~1000 or min-max position (°)
 /// speeds: 速度值数组，长度为6，范围为1~1000或最小~最大速度(°/s)
+/// speeds: Speed value array, length 6, range 1~1000 or min~max speed (°/s)
 /// 其中位置值和速度值一一对应
+/// Position values and speed values correspond one-to-one
 void stark_set_finger_positions_and_speeds(DeviceHandler *handle,
                                            uint8_t slave_id,
                                            const uint16_t *positions,
@@ -638,58 +819,97 @@ void stark_set_finger_positions_and_speeds(DeviceHandler *handle,
                                            uintptr_t len);
 
 /// 获取手指状态
+/// Get finger status
 /// 位置、速度、电流、马达运行状态
+/// Position, speed, current, motor running status
 /// 返回 MotorStatusData 结构体指针，需要调用 free_motor_status_data 释放内存
+/// Returns MotorStatusData struct pointer, call free_motor_status_data to release memory
 /// 如果失败，返回 NULL
+/// Returns NULL if failed
 MotorStatusData *stark_get_motor_status(DeviceHandler *handle, uint8_t slave_id);
 
 /// 运行动作序列
+/// Run action sequence
 /// action_id: 动作序列ID
+/// action_id: Action sequence ID
 void stark_run_action_sequence(DeviceHandler *handle, uint8_t slave_id, ActionSequenceId action_id);
 
 /// 传输动作序列
+/// Transfer action sequence
 ///
 /// 该函数用于传输多个动作序列。每个动作序列包含 20 个元素，依次为：
+/// This function is used to transfer multiple action sequences. Each action sequence contains 20 elements, in order:
 ///
 /// - action_id: 动作序列的 ID，用于唯一标识该动作序列
+/// - action_id: Action sequence ID, used to uniquely identify the action sequence
 /// - sequences: 动作序列参数数组，包含多个动作序列
+/// - sequences: Action sequence parameter array, containing multiple action sequences
 ///
 /// 一代灵巧手每个动作序列包含 20 个 u16 元素。每个序列包括以下信息：
+/// Generation 1 dexterous hand each action sequence contains 20 u16 elements. Each sequence includes the following information:
 ///   - 动作序列索引 (u16)：动作序列的索引，用于标识该动作序列在队列中的位置
+///   - Action sequence index (u16): Index of the action sequence, used to identify the position of the action sequence in the queue
 ///   - 持续时间 (u16)：该动作序列的执行时间，单位为毫秒
+///   - Duration (u16): Execution time of the action sequence, in milliseconds
 ///   - 手指位置 (u16): 6 个手指位置的值，范围为 0~100
+///   - Finger positions (u16): 6 finger position values, range 0~100
 ///   - 手指速度 (u16): 6 个手指速度的值，范围为 0~100
+///   - Finger speeds (u16): 6 finger speed values, range 0~100
 ///   - 手指力量 (u16): 6 个手指力量的值，范围为 0~100
+///   - Finger force (u16): 6 finger force values, range 0~100
 ///
 /// 示例：
+/// Example:
 /// 假设我们有以下动作序列数组：
+/// Suppose we have the following action sequence array:
 /// [0, 2000, 0, 0, 100, 100, 100, 100, 10, 20, 30, 40, 50, 60, 5, 10, 15, 20, 25, 30]
 ///
 /// 解释：
+/// Explanation:
 /// - `0`: 动作序列索引
+/// - `0`: Action sequence index
 /// - `2000`: 动作序列持续时间，单位毫秒
+/// - `2000`: Action sequence duration, in milliseconds
 /// - `0, 0, 100, 100, 100, 100`: 6 个手指位置
+/// - `0, 0, 100, 100, 100, 100`: 6 finger positions
 /// - `10, 20, 30, 40, 50, 60`: 6 个手指速度
+/// - `10, 20, 30, 40, 50, 60`: 6 finger speeds
 /// - `5, 10, 15, 20, 25, 30`: 6 个手指力量
+/// - `5, 10, 15, 20, 25, 30`: 6 finger forces
 ///
 /// 二代灵巧手每个动作序列包含 27 个 u16 元素。每个序列包括以下信息：
+/// Generation 2 dexterous hand each action sequence contains 27 u16 elements. Each sequence includes the following information:
 ///   - 动作序列索引 (u16)：动作序列的索引，用于标识该动作序列在队列中的位置
+///   - Action sequence index (u16): Index of the action sequence, used to identify the position of the action sequence in the queue
 ///   - 持续时间 (u16)：该动作序列的执行时间，单位为毫秒
+///   - Duration (u16): Execution time of the action sequence, in milliseconds
 ///   - 控制模式 (u16), 位置时间控制：1，位置速度控制：2，电流控制：3，速度控制：4
+///   - Control mode (u16), position-time control: 1, position-speed control: 2, current control: 3, speed control: 4
 ///   - 手指位置 (u16): 6 个手指位置的物理量（°）, 值为 65535 (0xFFFF) 表示手指保持原来角度
+///   - Finger positions (u16): 6 finger position physical quantities (°), value 65535 (0xFFFF) means finger maintains original angle
 ///   - 手指速度 (u16): 6 个手指速度的物理量，值为手指转动速度（°/s）
+///   - Finger speeds (u16): 6 finger speed physical quantities, value is finger rotation speed (°/s)
 ///   - 手指电流 (u16): 6 个手指电流的物理量，值为电流(mA)
+///   - Finger currents (u16): 6 finger current physical quantities, value is current (mA)
 ///
 /// - len: 动作序列的数量，指定 sequences 数组的行数，即动作序列的数量
+/// - len: Number of action sequences, specifies the number of rows in the sequences array, i.e., the number of action sequences
 ///
 /// # 参数说明
+/// # Parameter Description
 /// - `action_id`: 动作序列的 ID，唯一标识该序列
+/// - `action_id`: Action sequence ID, uniquely identifies the sequence
 /// - `sequences`: 一个指向动作序列的指针，表示多个动作序列的二维数组
+/// - `sequences`: A pointer to action sequences, representing a 2D array of multiple action sequences
 /// - `len`: 动作序列的数量，表示二维数组的行数
+/// - `len`: Number of action sequences, represents the number of rows in the 2D array
 ///
 /// # 错误处理
+/// # Error Handling
 /// - 如果 `handle` 或 `sequences` 为 NULL，将直接返回，不进行处理
+/// - If `handle` or `sequences` is NULL, it will return directly without processing
 /// - 如果 `len` 大于最大限制（一代灵巧手为32，二代灵巧手为8），会输出警告并提前返回
+/// - If `len` exceeds the maximum limit (32 for generation 1 hands, 8 for generation 2 hands), a warning will be output and return early
 void stark_set_action_sequence(DeviceHandler *handle,
                                uint8_t slave_id,
                                ActionSequenceId action_id,
@@ -697,103 +917,159 @@ void stark_set_action_sequence(DeviceHandler *handle,
                                uintptr_t len);
 
 /// 启用触觉传感器
+/// Enable touch sensor
 /// bits: 启用的触觉传感器位，范围为0~31
+/// bits: Touch sensor bits to enable, range 0~31
 /// 例如：0b00000001 表示仅启用大拇指位置的触觉传感器
+/// For example: 0b00000001 means only enable the touch sensor at thumb position
 void stark_enable_touch_sensor(DeviceHandler *handle, uint8_t slave_id, uint8_t bits);
 
 /// 获取触觉传感器通道数据
+/// Get touch sensor channel data
 /// 返回 TouchRawData 结构体指针，需要调用 free_touch_raw_data 释放内存
+/// Returns TouchRawData struct pointer, call free_touch_raw_data to release memory
 /// 如果失败，返回 NULL
+/// Returns NULL if failed
 TouchRawData *stark_get_touch_raw_data(DeviceHandler *handle, uint8_t slave_id);
 
 /// 读取单个手指三维力、接近值、触觉传感器状态
+/// Read single finger 3D force, proximity value, touch sensor status
 /// 返回单个手指三维力、接近值、触觉传感器状态
+/// Returns single finger 3D force, proximity value, touch sensor status
 /// index: 0~4，分别对应大拇指、食指、中指、无名指、小拇指
+/// index: 0~4, corresponding to thumb, index finger, middle finger, ring finger, pinky
 /// 使用完毕后需要调用 free_touch_finger_item 释放内存
+/// Call free_touch_finger_item to release memory after use
 /// 如果失败，返回 NULL
+/// Returns NULL if failed
 TouchFingerItem *stark_get_single_touch_status(DeviceHandler *handle,
                                                uint8_t slave_id,
                                                uint8_t index);
 
 /// 读取五指触觉传感器三维力、接近值、触觉传感器状态
+/// Read five-finger touch sensor 3D force, proximity value, touch sensor status
 /// 返回五指的触觉三维力数据、接近值、触觉传感器状态
+/// Returns five-finger tactile 3D force data, proximity values, touch sensor status
 /// 使用完毕后需要调用 free_touch_finger_data 释放内存
+/// Call free_touch_finger_data to release memory after use
 /// 如果失败，返回 NULL
+/// Returns NULL if failed
 TouchFingerData *stark_get_touch_status(DeviceHandler *handle, uint8_t slave_id);
 
 /// 重置触觉传感器采集通道
+/// Reset touch sensor acquisition channel
 /// 在执行该指令时，手指传感器尽量不要受力。
+/// When executing this command, try to avoid applying force to the finger sensors.
 /// bits: 重置的触觉传感器位，范围为0~31
+/// bits: Touch sensor bits to reset, range 0~31
 /// 例如：0b00000001 表示重置第一个传感器
+/// For example: 0b00000001 means reset the first sensor
 void stark_reset_touch_sensor(DeviceHandler *handle, uint8_t slave_id, uint8_t bits);
 
 /// 触觉传感器参数校准
+/// Touch sensor parameter calibration
 /// bits: 校准的触觉传感器位，范围为0~31
+/// bits: Touch sensor bits to calibrate, range 0~31
 /// 例如：0b00000001 表示校准第一个传感器
+/// For example: 0b00000001 means calibrate the first sensor
 /// 当空闲状态下的三维力数值不为0时，可通过该方法进行校准
+/// When the 3D force values are not 0 in idle state, this method can be used for calibration
 /// https://www.brainco-hz.com/docs/revolimb-hand/protocol/stark_protocol_touch.html#_5-3-%E5%8F%82%E6%95%B0%E6%A0%A1%E5%87%864105
 void stark_calibrate_touch_sensor(DeviceHandler *handle,
                                   uint8_t slave_id,
                                   uint8_t bits);
 
 /// 在设备上电时，启用/禁用 位置自动校准
+/// Enable/disable automatic position calibration when device powers on
 bool stark_get_auto_calibration(DeviceHandler *handle, uint8_t slave_id);
 
 /// 在设备上电时，启用/禁用 位置自动校准
+/// Enable/disable automatic position calibration when device powers on
 void stark_set_auto_calibration(DeviceHandler *handle, uint8_t slave_id, bool enabled);
 
 /// 发送校准位置指令
+/// Send calibrate position command
 /// 用于手动校准位置
+/// Used for manual position calibration
 void stark_send_calibrate_position(DeviceHandler *handle, uint8_t slave_id);
 
 /// 重置默认手势
+/// Reset default gestures
 /// 该指令会将所有手势恢复为出厂默认值
+/// This command will restore all gestures to factory default values
 void stark_reset_default_gesture(DeviceHandler *handle, uint8_t slave_id);
 
 /// 重置默认设置
+/// Reset default settings
 /// 该指令会将所有设置恢复为出厂默认值
+/// This command will restore all settings to factory default values
 /// ● 默认ID：左手 → 恢复为 0x7E（126）；右手 → 恢复为 0x7F（127）
+/// ● Default ID: Left hand → restore to 0x7E (126); Right hand → restore to 0x7F (127)
 /// ● RS485 波特率：恢复为 460800 bps。
+/// ● RS485 baud rate: restore to 460800 bps
 /// ● CAN FD 波特率：恢复为 5 Mbps
+/// ● CAN FD baud rate: restore to 5 Mbps
 void stark_reset_default_settings(DeviceHandler *handle, uint8_t slave_id);
 
 /// 是否开启了 Turbo 模式
+/// Check if Turbo mode is enabled
 /// 开启之后会持续握紧
+/// After enabling, it will continuously grip
 bool stark_get_turbo_mode_enabled(DeviceHandler *handle, uint8_t slave_id);
 
 /// 设置 Turbo 模式
+/// Set Turbo mode
 void stark_set_turbo_mode_enabled(DeviceHandler *handle, uint8_t slave_id, bool enabled);
 
 /// 获取 Turbo 模式配置
+/// Get Turbo mode configuration
 /// 返回 TurboConfig 结构体指针，需要调用 free_turbo_config 释放内存
+/// Returns TurboConfig struct pointer, call free_turbo_config to release memory
 /// 如果失败，返回 NULL
+/// Returns NULL if failed
 TurboConfig *stark_get_turbo_config(DeviceHandler *handle, uint8_t slave_id);
 
 /// 获取 LED 灯信息
+/// Get LED light information
 /// 返回 LedInfo 结构体指针，需要调用 free_led_info 释放内存
+/// Returns LedInfo struct pointer, call free_led_info to release memory
 /// 如果失败，返回 NULL
+/// Returns NULL if failed
 LedInfo *stark_get_led_info(DeviceHandler *handle, uint8_t slave_id);
 
 /// 获取按键事件
+/// Get button event
 /// 返回 ButtonPressEvent 结构体指针，需要调用 free_button_event 释放内存
+/// Returns ButtonPressEvent struct pointer, call free_button_event to release memory
 /// 如果失败，返回 NULL
+/// Returns NULL if failed
 ButtonPressEvent *stark_get_button_event(DeviceHandler *handle, uint8_t slave_id);
 
 /// 该函数用于启动 DFU（Device Firmware Update）过程。
+/// This function is used to start the DFU (Device Firmware Update) process.
 /// - `handle`: 设备处理器指针
+/// - `handle`: Device handler pointer
 /// - `slave_id`: 从设备 ID
+/// - `slave_id`: Slave device ID
 /// - `dfu_file_path`: DFU 文件路径，C 字符串格式
+/// - `dfu_file_path`: DFU file path, C string format
 /// - `wait_secs`: 等待进入DFU模式时间，单位为秒，默认为5秒
+/// - `wait_secs`: Wait time to enter DFU mode, in seconds, default is 5 seconds
 void start_dfu(DeviceHandler *handle,
                uint8_t slave_id,
                const char *dfu_file_path,
                uintptr_t wait_secs);
 
 /// 停止 DFU 过程
+/// Stop DFU process
 /// - `slave_id`: 从设备 ID
+/// - `slave_id`: Slave device ID
 /// 该函数用于停止 DFU 过程。
+/// This function is used to stop the DFU process.
 /// 注意：在调用此函数之前，请确保 DFU 过程已经开始。
+/// Note: Before calling this function, please ensure that the DFU process has already started.
 /// 如果 DFU 过程未开始或已经完成，此函数将不会有任何效果。
+/// If the DFU process has not started or has already completed, this function will have no effect.
 void stop_dfu(uint8_t slave_id);
 
 void free_device_config(DeviceConfig *config);
@@ -817,27 +1093,35 @@ void free_button_event(ButtonPressEvent *event);
 void free_string(const char *s);
 
 /// 设置Modbus异步读写回调
+/// Set Modbus asynchronous read/write callback
 void set_modbus_operation_callback(ModbusOperationCallback cb);
 
 /// 设置Modbus读回调, input_registers
+/// Set Modbus read callback, input_registers
 void set_modbus_read_input_callback(ModbusRxCallback cb);
 
 /// 设置Modbus读回调, holding_registers
+/// Set Modbus read callback, holding_registers
 void set_modbus_read_holding_callback(ModbusRxCallback cb);
 
 /// 设置Modbus写回调
+/// Set Modbus write callback
 void set_modbus_write_callback(ModbusTxCallback cb);
 
 /// 设置CAN/CANFD 读回调
+/// Set CAN/CANFD read callback
 void set_can_rx_callback(CanRxCallback cb);
 
 /// 设置CAN/CANFD 写回调
+/// Set CAN/CANFD write callback
 void set_can_tx_callback(CanTxCallback cb);
 
 /// 设置DFU状态回调
+/// Set DFU state callback
 void set_dfu_state_callback(DfuStateCallback cb);
 
 /// 设置DFU进度回调
+/// Set DFU progress callback
 void set_dfu_progress_callback(DfuProgressCallback cb);
 
 }  // extern "C"
