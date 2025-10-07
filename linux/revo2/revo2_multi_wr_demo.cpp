@@ -30,27 +30,41 @@ int main(int argc, char const *argv[]) {
          handler);  // Install our handler for SIGSEGV (segmentation fault)
   signal(SIGABRT, handler);  // Install our handler for SIGABRT (abort signal)
 
-  init_cfg(STARK_PROTOCOL_TYPE_MODBUS, LOG_LEVEL_DEBUG);  // 初始化配置
-  auto cfg = auto_detect_modbus_revo2(
+#ifdef LEFT_HAND_PRESENT
+  init_cfg(STARK_PROTOCOL_TYPE_MODBUS, LOG_LEVEL_WARN);  // 初始化配置
+  auto cfg_left = auto_detect_modbus_revo2(
       "/dev/ttyUSB0", true);  // 替换为实际的串口名称, 传None会尝试自动检测
-  if (cfg == NULL) {
+  if (cfg_left == NULL) {
     fprintf(stderr, "Failed to auto-detect Modbus device configuration.\n");
     return -1;
   }
 
-  auto handle = modbus_open(cfg->port_name, cfg->baudrate);
-  free_device_config(cfg);
+  uint8_t slave_id_left = cfg_left->slave_id;
+  auto handle_left = modbus_open(cfg_left->port_name, cfg_left->baudrate);
+  free_device_config(cfg_left);
+#endif
 
-  // 方式1：单个串口连接多个设备（需要配置不同的设备ID）
+#ifdef RIGHT_HAND_PRESENT
+  init_cfg(STARK_PROTOCOL_TYPE_MODBUS, LOG_LEVEL_WARN);  // 初始化配置
+  auto cfg_right = auto_detect_modbus_revo2(
+      "/dev/ttyUSB1", true);  // 替换为实际的串口名称, 传None会尝试自动检测
+  if (cfg_right == NULL) {
+    fprintf(stderr, "Failed to auto-detect Modbus device configuration.\n");
+    return -1;
+  }
+
+  uint8_t slave_id_right = cfg_right->slave_id;
+  auto handle_right = modbus_open(cfg_right->port_name, cfg_right->baudrate);
+  free_device_config(cfg_right);
+#endif
 
 #ifdef LEFT_HAND_PRESENT
-  uint8_t slave_id_left = 0x7e;
-  get_device_info(handle, slave_id_left);
+  get_device_info(handle_left, slave_id_left);
 
-  stark_set_finger_unit_mode(handle, slave_id_left,
+  stark_set_finger_unit_mode(handle_left, slave_id_left,
                              FINGER_UNIT_MODE_NORMALIZED);
 
-  auto mode_left = stark_get_finger_unit_mode(handle, slave_id_left);
+  auto mode_left = stark_get_finger_unit_mode(handle_left, slave_id_left);
   if (mode_left == FINGER_UNIT_MODE_NORMALIZED) {
     printf("Left Finger unit mode: Normalized\n");
   } else if (mode_left == FINGER_UNIT_MODE_PHYSICAL) {
@@ -59,19 +73,18 @@ int main(int argc, char const *argv[]) {
     printf("Left Finger unit mode: Unknown\n");
   }
 
-  stark_run_action_sequence(handle, slave_id_left,
+  stark_run_action_sequence(handle_left, slave_id_left,
                             ACTION_SEQUENCE_ID_DEFAULT_GESTURE_OPEN);
 #endif
 
 #ifdef RIGHT_HAND_PRESENT
-  uint8_t slave_id_right = 0x7f;
-  get_device_info(handle, slave_id_right);
+  get_device_info(handle_right, slave_id_right);
 
   // 设置手指控制参数的单位模式
-  stark_set_finger_unit_mode(handle, slave_id_right,
+  stark_set_finger_unit_mode(handle_right, slave_id_right,
                              FINGER_UNIT_MODE_NORMALIZED);
 
-  auto mode_right = stark_get_finger_unit_mode(handle, slave_id_right);
+  auto mode_right = stark_get_finger_unit_mode(handle_right, slave_id_right);
   if (mode_right == FINGER_UNIT_MODE_NORMALIZED) {
     printf("Right Finger unit mode: Normalized\n");
   } else if (mode_right == FINGER_UNIT_MODE_PHYSICAL) {
@@ -80,7 +93,7 @@ int main(int argc, char const *argv[]) {
     printf("Right Finger unit mode: Unknown\n");
   }
 
-  stark_run_action_sequence(handle, slave_id_right,
+  stark_run_action_sequence(handle_right, slave_id_right,
                             ACTION_SEQUENCE_ID_DEFAULT_GESTURE_OPEN);
 #endif
 
@@ -124,21 +137,22 @@ int main(int argc, char const *argv[]) {
     // Left hand: counting sequence
     printf("Left hand displaying number: %d\n", number);
     stark_set_finger_positions_and_durations(
-        handle, slave_id_left, number_positions[number], durations, 6);
+        handle_left, slave_id_left, number_positions[number], durations, 6);
     usleep(delay);
 #endif
 
 #ifdef RIGHT_HAND_PRESENT
     // Right hand: action sequences
     printf("Right hand running action sequence ID: %d\n", action_id);
-    stark_run_action_sequence(handle, slave_id_right,
+    stark_run_action_sequence(handle_right, slave_id_right,
                               (ActionSequenceId)action_id);
     usleep(delay);
 #endif
 
 #ifdef LEFT_HAND_PRESENT
     // Get and display status for both hands
-    auto finger_status_left = stark_get_motor_status(handle, slave_id_left);
+    auto finger_status_left =
+        stark_get_motor_status(handle_left, slave_id_left);
     if (finger_status_left != NULL) {
       printf("Left hand number %d - Positions: %hu, %hu, %hu, %hu, %hu, %hu\n",
              number, finger_status_left->positions[0],
@@ -151,7 +165,8 @@ int main(int argc, char const *argv[]) {
 #endif
 
 #ifdef RIGHT_HAND_PRESENT
-    auto finger_status_right = stark_get_motor_status(handle, slave_id_right);
+    auto finger_status_right =
+        stark_get_motor_status(handle_right, slave_id_right);
     if (finger_status_right != NULL) {
       printf(
           "Right hand action %d - Positions: %hu, %hu, %hu, %hu, %hu, %hu\n",
@@ -178,7 +193,12 @@ int main(int argc, char const *argv[]) {
     }
   }
 
-  modbus_close(handle);
+#ifdef LEFT_HAND_PRESENT
+  modbus_close(handle_left);
+#endif
+#ifdef RIGHT_HAND_PRESENT
+  modbus_close(handle_right);
+#endif
   return 0;
 }
 
